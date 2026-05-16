@@ -74,10 +74,17 @@ def analyze():
     try:
         body = request.json
 
+        if not body:
+            return jsonify({"success": False, "error": "Request body is required"}), 400
+
         system_prompt = body.get("systemPrompt")
         context = body.get("context")
 
+        if not system_prompt or not context:
+            return jsonify({"success": False, "error": "systemPrompt and context are required"}), 400
+
         token = get_ibm_token()
+
 
         print("\nTOKEN OK\n")
 
