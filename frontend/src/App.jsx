@@ -79,71 +79,96 @@ async function searchGitHub(query) {
 }
 
 async function fetchRepoContext(owner, repo) {
-  // Get repo info
-  const infoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
-    headers: GITHUB_HEADERS,
-  });
+  const infoRes = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}`,
+    { headers: GITHUB_HEADERS }
+  );
+
+  if (infoRes.status === 403 || infoRes.status === 429) {
+    throw new Error("GitHub rate limit hit. Wait a minute and try again.");
+  }
+
   const info = await infoRes.json();
 
-  // Get file tree
   const treeRes = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`,
-    { headers: GITHUB_HEADERS },
+    { headers: GITHUB_HEADERS }
   );
   const tree = await treeRes.json();
+  const allFiles = tree.tree || [];
 
   // Get README
   let readme = "";
   try {
     const readmeRes = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/readme`,
-      { headers: GITHUB_HEADERS },
+      { headers: GITHUB_HEADERS }
     );
     const readmeData = await readmeRes.json();
     readme = atob(readmeData.content.replace(/\n/g, ""));
-    readme = readme.slice(0, 3000);
+    readme = readme.slice(0, 5000);
   } catch {}
 
-  // Get top files content (limit to avoid token explosion)
-  const files = (tree.tree || [])
-    .filter(
-      (f) =>
-        f.type === "blob" &&
-        !f.path.includes("node_modules") &&
-        !f.path.includes(".git") &&
-        !f.path.includes("package-lock") &&
-        (f.path.endsWith(".js") ||
-          f.path.endsWith(".ts") ||
-          f.path.endsWith(".jsx") ||
-          f.path.endsWith(".tsx") ||
-          f.path.endsWith(".py") ||
-          f.path.endsWith(".go") ||
-          f.path.endsWith(".java") ||
-          f.path.endsWith(".rs") ||
-          f.path.endsWith(".cpp") ||
-          f.path.endsWith(".c")),
-    )
-    .slice(0, 8);
+  // Priority files — these tell Bob the most
+  const PRIORITY_NAMES = [
+    "package.json", "requirements.txt", "go.mod", "Cargo.toml",
+    "pyproject.toml", "Makefile", "docker-compose.yml", "Dockerfile",
+    ".env.example", "config.js", "config.ts", "config.py",
+    "index.js", "index.ts", "main.py", "main.go", "main.rs",
+    "app.js", "app.ts", "app.py", "server.js", "server.ts",
+  ];
+
+  const CODE_EXTENSIONS = [
+    ".js", ".ts", ".jsx", ".tsx", ".py", ".go",
+    ".java", ".rs", ".cpp", ".c", ".rb", ".php"
+  ];
+
+  const IGNORE = ["node_modules", ".git", "package-lock", "yarn.lock", "dist/", "build/", ".min."];
+
+  const shouldIgnore = (path) => IGNORE.some((i) => path.includes(i));
+
+  // Split into priority and regular files
+  const priorityFiles = allFiles.filter(
+    (f) => f.type === "blob" &&
+    !shouldIgnore(f.path) &&
+    PRIORITY_NAMES.some((name) => f.path.endsWith(name))
+  );
+
+  const codeFiles = allFiles.filter(
+    (f) => f.type === "blob" &&
+    !shouldIgnore(f.path) &&
+    CODE_EXTENSIONS.some((ext) => f.path.endsWith(ext)) &&
+    !priorityFiles.includes(f)
+  );
+
+  // Fetch priority files first, then fill up with code files
+  const filesToFetch = [
+    ...priorityFiles.slice(0, 6),
+    ...codeFiles.slice(0, 10),
+  ];
 
   let fileContents = "";
-  for (const file of files) {
+  for (const file of filesToFetch) {
     try {
       const res = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/contents/${file.path}`,
-        { headers: GITHUB_HEADERS },
+        { headers: GITHUB_HEADERS }
       );
       const data = await res.json();
       if (data.content) {
-        const content = atob(data.content.replace(/\n/g, "")).slice(0, 800);
+        // Priority files get more space, code files get less
+        const isPriority = priorityFiles.includes(file);
+        const limit = isPriority ? 2000 : 1000;
+        const content = atob(data.content.replace(/\n/g, "")).slice(0, limit);
         fileContents += `\n\n=== ${file.path} ===\n${content}`;
       }
     } catch {}
   }
 
-  const allPaths = (tree.tree || [])
-    .filter((f) => f.type === "blob" && !f.path.includes("node_modules"))
+  const allPaths = allFiles
+    .filter((f) => f.type === "blob" && !shouldIgnore(f.path))
     .map((f) => f.path)
-    .slice(0, 60)
+    .slice(0, 100)
     .join("\n");
 
   return `
@@ -152,7 +177,7 @@ DESCRIPTION: ${info.description || "No description"}
 STARS: ${info.stargazers_count} | LANGUAGE: ${info.language} | FORKS: ${info.forks_count}
 TOPICS: ${(info.topics || []).join(", ")}
 
-FILE STRUCTURE:
+FILE STRUCTURE (up to 100 files):
 ${allPaths}
 
 README (truncated):
