@@ -11,6 +11,7 @@ export default function Clarity() {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [selectedRepo, setSelectedRepo] = useState(null);
+  const [repoContext, setRepoContext] = useState(null);
   const [mode, setMode] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
@@ -24,7 +25,9 @@ export default function Clarity() {
     setSelectedRepo(null);
     setSearchResults([]);
 
-    const githubUrl = val.match(/github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)/);
+    const githubUrl = val.match(
+      /github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)/,
+    );
     if (githubUrl) {
       const [, owner, repo] = githubUrl;
       const repoName = `${owner}/${repo.replace(/\.git$/, "")}`;
@@ -66,12 +69,14 @@ export default function Clarity() {
     try {
       setLoadingMsg("Fetching repository...");
       const context = await fetchRepoContext(owner, repo);
+      setRepoContext(context); // add this line
 
       setLoadingMsg("Bob is reading the codebase...");
       await new Promise((r) => setTimeout(r, 800));
 
       setLoadingMsg("IBM Bob is analyzing the codebase...");
-      const systemPrompt = mode === "onboard" ? BOB_SYSTEM_ONBOARD : BOB_SYSTEM_IMPROVE;
+      const systemPrompt =
+        mode === "onboard" ? BOB_SYSTEM_ONBOARD : BOB_SYSTEM_IMPROVE;
 
       const response = await fetch("http://localhost:3001/analyze", {
         method: "POST",
@@ -92,7 +97,8 @@ export default function Clarity() {
         let clean = text.replace(/```json|```/g, "").trim();
         const start = clean.indexOf("{");
         const end = clean.lastIndexOf("}");
-        if (start === -1 || end === -1) throw new Error("No JSON object found in response");
+        if (start === -1 || end === -1)
+          throw new Error("No JSON object found in response");
         clean = clean.slice(start, end + 1);
         parsed = JSON.parse(clean);
       } catch (e) {
@@ -104,7 +110,10 @@ export default function Clarity() {
       setScreen("results");
     } catch (err) {
       console.error("Error:", err);
-      setError(err.message || "Analysis failed. Please check your connection and try again.");
+      setError(
+        err.message ||
+          "Analysis failed. Please check your connection and try again.",
+      );
     }
 
     setLoading(false);
@@ -141,7 +150,7 @@ export default function Clarity() {
         />
       )}
       {screen === "results" && result && (
-        <Results result={result} onReset={reset} />
+        <Results result={result} repoContext={repoContext} onReset={reset} />
       )}
     </div>
   );

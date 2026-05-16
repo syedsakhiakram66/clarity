@@ -2,10 +2,13 @@ import { useState } from "react";
 import { s } from "../styles/index.js";
 import { Section } from "./Section.jsx";
 import { StatPill } from "./StatPill.jsx";
+import { BobChat } from "./BobChat.jsx";
 
-export function Results({ result, onReset }) {
+
+export function Results({ result, onReset, repoContext }) {
   const isOnboard = result.mode === "onboard";
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState("report");
 
   const handleCopy = () => {
     const text = JSON.stringify(result, null, 2);
@@ -23,32 +26,68 @@ export function Results({ result, onReset }) {
       </div>
 
       <div style={s.resultsContent}>
-        <div style={s.heroBlock}>
-          <div style={s.modeBadge}>
-            {isOnboard ? "ONBOARDING REPORT" : "IMPROVEMENT REPORT"} · IBM Bob
-          </div>
-          <div style={s.heroTitle}>{result.repo.full_name}</div>
-          <div style={s.heroStats}>
-            <StatPill label="STARS" value={`★ ${(result.repo.stargazers_count / 1000).toFixed(1)}k`} />
-            <StatPill label="LANGUAGE" value={result.repo.language || "?"} />
-            <StatPill label="FORKS" value={result.repo.forks_count?.toLocaleString() || "?"} />
-            {!isOnboard && <StatPill label="HEALTH" value={`${result.healthScore}/100`} />}
-          </div>
-          <button
-            style={{
-              ...s.backBtn,
-              marginTop: "20px",
-              color: copied ? "#00ff88" : "#555",
-              borderColor: copied ? "#00ff88" : "#333",
-            }}
-            onClick={handleCopy}
-          >
-            {copied ? "✓ copied to clipboard" : "⎘ export report"}
-          </button>
-        </div>
+  {/* Hero */}
+  <div style={s.heroBlock}>
+    <div style={s.modeBadge}>
+      {isOnboard ? "ONBOARDING REPORT" : "IMPROVEMENT REPORT"} · IBM Bob
+    </div>
+    <div style={s.heroTitle}>{result.repo.full_name}</div>
+    <div style={s.heroStats}>
+      <StatPill label="STARS" value={`★ ${(result.repo.stargazers_count / 1000).toFixed(1)}k`} />
+      <StatPill label="LANGUAGE" value={result.repo.language || "?"} />
+      <StatPill label="FORKS" value={result.repo.forks_count?.toLocaleString() || "?"} />
+      {!isOnboard && <StatPill label="HEALTH" value={`${result.healthScore}/100`} />}
+    </div>
+    <button
+      style={{
+        ...s.backBtn,
+        marginTop: "20px",
+        color: copied ? "#00ff88" : "#555",
+        borderColor: copied ? "#00ff88" : "#333",
+      }}
+      onClick={handleCopy}
+    >
+      {copied ? "✓ copied to clipboard" : "⎘ export report"}
+    </button>
+  </div>
 
-        {isOnboard ? <OnboardReport result={result} /> : <ImproveReport result={result} />}
-      </div>
+  {/* Tabs */}
+  <div style={{
+    display: "flex",
+    gap: "0",
+    marginBottom: "32px",
+    borderBottom: "1px solid #1a1a1a",
+  }}>
+    {["report", "bob"].map((tab) => (
+      <button
+        key={tab}
+        onClick={() => setActiveTab(tab)}
+        style={{
+          background: "transparent",
+          border: "none",
+          borderBottom: activeTab === tab ? "2px solid #fff" : "2px solid transparent",
+          color: activeTab === tab ? "#fff" : "#444",
+          padding: "10px 20px",
+          fontSize: "11px",
+          fontFamily: "inherit",
+          letterSpacing: "2px",
+          cursor: "pointer",
+          marginBottom: "-1px",
+          transition: "color 0.15s",
+        }}
+      >
+        {tab === "report" ? "REPORT" : "⚡ FIX WITH BOB"}
+      </button>
+    ))}
+  </div>
+
+  {/* Tab content */}
+  {activeTab === "report" ? (
+    isOnboard ? <OnboardReport result={result} /> : <ImproveReport result={result} />
+  ) : (
+    <BobChat result={result} repoContext={repoContext} />
+  )}
+</div>
     </div>
   );
 }
