@@ -61,30 +61,13 @@ Be specific. Use real file paths. Be brutally honest. Return ONLY valid JSON.`;
 
 // ─── IBM Watson API helpers ───────────────────────────────────────────────────
 
-async function getIBMAccessToken() {
-  const response = await fetch(
-    "https://iam.cloud.ibm.com/identity/token",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        grant_type: "urn:ibm:params:oauth:grant-type:apikey",
-        apikey: import.meta.env.VITE_IBM_API_KEY,
-      }),
-    }
-  );
-
-  const data = await response.json();
-  return data.access_token;
-}
+//don't need this because backend is handling this
 
 // ─── GitHub API helpers ───────────────────────────────────────────────────────
 
 async function searchGitHub(query) {
   const res = await fetch(
-    `https://api.github.com/search/repositories?q=${encodeURIComponent(query)}&sort=stars&per_page=6`
+    `https://api.github.com/search/repositories?q=${encodeURIComponent(query)}&sort=stars&per_page=6`,
   );
   const data = await res.json();
   return data.items || [];
@@ -97,7 +80,7 @@ async function fetchRepoContext(owner, repo) {
 
   // Get file tree
   const treeRes = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`
+    `https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`,
   );
   const tree = await treeRes.json();
 
@@ -105,7 +88,7 @@ async function fetchRepoContext(owner, repo) {
   let readme = "";
   try {
     const readmeRes = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/readme`
+      `https://api.github.com/repos/${owner}/${repo}/readme`,
     );
     const readmeData = await readmeRes.json();
     readme = atob(readmeData.content.replace(/\n/g, ""));
@@ -129,7 +112,7 @@ async function fetchRepoContext(owner, repo) {
           f.path.endsWith(".java") ||
           f.path.endsWith(".rs") ||
           f.path.endsWith(".cpp") ||
-          f.path.endsWith(".c"))
+          f.path.endsWith(".c")),
     )
     .slice(0, 8);
 
@@ -137,7 +120,7 @@ async function fetchRepoContext(owner, repo) {
   for (const file of files) {
     try {
       const res = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/contents/${file.path}`
+        `https://api.github.com/repos/${owner}/${repo}/contents/${file.path}`,
       );
       const data = await res.json();
       if (data.content) {
@@ -234,55 +217,56 @@ export default function Clarity() {
         mode === "onboard" ? BOB_SYSTEM_ONBOARD : BOB_SYSTEM_IMPROVE;
 
       // Get IBM Watson access token
-      setLoadingMsg("Authenticating with IBM Watson...");
-      const token = await getIBMAccessToken();
-
       setLoadingMsg("IBM Bob is analyzing the codebase...");
-      const response = await fetch(
-        "https://us-south.ml.cloud.ibm.com/ml/v1/text/chat?version=2023-05-29",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            model_id: "ibm/granite-3-8b-instruct",
-            project_id: import.meta.env.VITE_IBM_PROJECT_ID,
-            messages: [
-              {
-                role: "system",
-                content: systemPrompt,
-              },
-              {
-                role: "user",
-                content: `Analyze this repository and give me the ${mode === "onboard" ? "onboarding" : "improvement"} report:\n\n${context}`,
-              },
-            ],
-          }),
-        }
-      );
+
+      const response = await fetch("http://localhost:3001/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          systemPrompt,
+          context: `Analyze this repository and give me the ${
+            mode === "onboard" ? "onboarding" : "improvement"
+          } report:\n\n${context}`,
+        }),
+      });
 
       const data = await response.json();
-      
+
+      if (!data.success) {
+        throw new Error(data.error || "Analysis failed");
+      }
+
       // IBM Watson response format: data.choices[0].message.content
-      const text = data.choices?.[0]?.message?.content || "";
-      const clean = text.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(clean);
+      const text = data.text || "";
+      let parsed;
+
+      try {
+        const clean = text.replace(/```json|```/g, "").trim();
+        parsed = JSON.parse(clean);
+      } catch (e) {
+        console.log("RAW IBM OUTPUT:", text);
+        throw new Error("Model returned invalid JSON");
+      }
       setResult({ ...parsed, repo: selectedRepo, mode });
       setScreen("results");
     } catch (err) {
       console.error("IBM Watson API Error:", err);
-      
+
       // Provide more specific error messages
       if (err.message?.includes("token") || err.message?.includes("auth")) {
         setError("Authentication failed. Please check your IBM API key.");
       } else if (err.message?.includes("project")) {
-        setError("Invalid project ID. Please check your IBM project configuration.");
+        setError(
+          "Invalid project ID. Please check your IBM project configuration.",
+        );
       } else if (err.message?.includes("JSON")) {
         setError("Failed to parse AI response. The model may need adjustment.");
       } else {
-        setError("Analysis failed. Please check your connection and try again.");
+        setError(
+          "Analysis failed. Please check your connection and try again.",
+        );
       }
     }
     setLoading(false);
@@ -327,7 +311,21 @@ export default function Clarity() {
 
 // ─── Home Screen ──────────────────────────────────────────────────────────────
 
-function Home({ query, onSearch, searching, searchResults, selectedRepo, onSelectRepo, mode, onMode, onAnalyze, loading, loadingMsg, error, searchRef }) {
+function Home({
+  query,
+  onSearch,
+  searching,
+  searchResults,
+  selectedRepo,
+  onSelectRepo,
+  mode,
+  onMode,
+  onAnalyze,
+  loading,
+  loadingMsg,
+  error,
+  searchRef,
+}) {
   const canAnalyze = selectedRepo && mode && !loading;
 
   return (
@@ -335,7 +333,9 @@ function Home({ query, onSearch, searching, searchResults, selectedRepo, onSelec
       {/* Header */}
       <div style={s.topbar}>
         <span style={s.brand}>CLARITY</span>
-        <span style={s.brandSub}>// repo intelligence · powered by IBM Bob</span>
+        <span style={s.brandSub}>
+          // repo intelligence · powered by IBM Bob
+        </span>
       </div>
 
       <div style={s.homeContent}>
@@ -343,7 +343,8 @@ function Home({ query, onSearch, searching, searchResults, selectedRepo, onSelec
         <div style={s.titleBlock}>
           <div style={s.titlePre}>$ clarity --analyze</div>
           <h1 style={s.title}>
-            Drop into any codebase.<br />
+            Drop into any codebase.
+            <br />
             <span style={s.titleAccent}>Know exactly where to start.</span>
           </h1>
           <p style={s.subtitle}>
@@ -375,12 +376,18 @@ function Home({ query, onSearch, searching, searchResults, selectedRepo, onSelec
                   key={repo.id}
                   style={s.dropdownItem}
                   onClick={() => onSelectRepo(repo)}
-                  onMouseEnter={(e) => e.currentTarget.style.background = "#1a1a1a"}
-                  onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = "#1a1a1a")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = "transparent")
+                  }
                 >
                   <div style={s.dropdownName}>{repo.full_name}</div>
                   <div style={s.dropdownMeta}>
-                    ★ {repo.stargazers_count.toLocaleString()} · {repo.language || "unknown"} · {repo.description?.slice(0, 60) || "no description"}
+                    ★ {repo.stargazers_count.toLocaleString()} ·{" "}
+                    {repo.language || "unknown"} ·{" "}
+                    {repo.description?.slice(0, 60) || "no description"}
                   </div>
                 </div>
               ))}
@@ -392,7 +399,10 @@ function Home({ query, onSearch, searching, searchResults, selectedRepo, onSelec
             <div style={s.selectedRepo}>
               <span style={s.selectedTag}>SELECTED</span>
               <span style={s.selectedName}>{selectedRepo.full_name}</span>
-              <span style={s.selectedMeta}>★ {selectedRepo.stargazers_count?.toLocaleString()} · {selectedRepo.language}</span>
+              <span style={s.selectedMeta}>
+                ★ {selectedRepo.stargazers_count?.toLocaleString()} ·{" "}
+                {selectedRepo.language}
+              </span>
             </div>
           )}
         </div>
@@ -433,11 +443,16 @@ function Home({ query, onSearch, searching, searchResults, selectedRepo, onSelec
         )}
 
         {/* Analyze button */}
-        {canAnalyze && (
-          <button style={s.analyzeBtn} onClick={onAnalyze}>
-            RUN CLARITY →
-          </button>
-        )}
+        <button
+          style={{
+            ...s.analyzeBtn,
+            ...(loading ? { opacity: 0.4, cursor: "not-allowed" } : {}),
+          }}
+          onClick={onAnalyze}
+          disabled={loading}
+        >
+          {loading ? "ANALYZING..." : "RUN CLARITY →"}
+        </button>
       </div>
     </div>
   );
@@ -454,7 +469,9 @@ function Results({ result, onReset }) {
       <div style={s.resultsTopbar}>
         <span style={s.brand}>CLARITY</span>
         <span style={s.resultsRepo}>// {result.repo.full_name}</span>
-        <button style={s.backBtn} onClick={onReset}>← new repo</button>
+        <button style={s.backBtn} onClick={onReset}>
+          ← new repo
+        </button>
       </div>
 
       <div style={s.resultsContent}>
@@ -480,7 +497,11 @@ function OnboardReport({ result: r }) {
       <Section label="WHAT IS THIS">
         <p style={s.bodyText}>{r.summary}</p>
         <div style={s.chips}>
-          {r.stack?.map((t) => <span key={t} style={s.chip}>{t}</span>)}
+          {r.stack?.map((t) => (
+            <span key={t} style={s.chip}>
+              {t}
+            </span>
+          ))}
         </div>
       </Section>
 
@@ -535,14 +556,21 @@ function OnboardReport({ result: r }) {
 }
 
 function ImproveReport({ result: r }) {
-  const scoreColor = r.healthScore >= 70 ? "#00ff88" : r.healthScore >= 40 ? "#ffaa00" : "#ff4444";
+  const scoreColor =
+    r.healthScore >= 70
+      ? "#00ff88"
+      : r.healthScore >= 40
+        ? "#ffaa00"
+        : "#ff4444";
 
   return (
     <div style={s.reportWrap}>
       {/* Health score */}
       <Section label="CODEBASE HEALTH">
         <div style={s.scoreRow}>
-          <div style={{ ...s.score, color: scoreColor }}>{r.healthScore}/100</div>
+          <div style={{ ...s.score, color: scoreColor }}>
+            {r.healthScore}/100
+          </div>
           <p style={s.bodyText}>{r.verdict}</p>
         </div>
       </Section>
@@ -562,11 +590,23 @@ function ImproveReport({ result: r }) {
       <Section label="ALL ISSUES">
         {r.issues?.map((issue, i) => (
           <div key={i} style={s.issueRow}>
-            <span style={{
-              ...s.severityTag,
-              color: issue.severity === "HIGH" ? "#ff4444" : issue.severity === "MEDIUM" ? "#ffaa00" : "#888",
-              borderColor: issue.severity === "HIGH" ? "#ff4444" : issue.severity === "MEDIUM" ? "#ffaa00" : "#888",
-            }}>
+            <span
+              style={{
+                ...s.severityTag,
+                color:
+                  issue.severity === "HIGH"
+                    ? "#ff4444"
+                    : issue.severity === "MEDIUM"
+                      ? "#ffaa00"
+                      : "#888",
+                borderColor:
+                  issue.severity === "HIGH"
+                    ? "#ff4444"
+                    : issue.severity === "MEDIUM"
+                      ? "#ffaa00"
+                      : "#888",
+              }}
+            >
               {issue.severity}
             </span>
             <div>
@@ -634,7 +674,12 @@ const s = {
     alignItems: "center",
     gap: "12px",
   },
-  brand: { fontSize: "14px", fontWeight: "bold", color: "#fff", letterSpacing: "4px" },
+  brand: {
+    fontSize: "14px",
+    fontWeight: "bold",
+    color: "#fff",
+    letterSpacing: "4px",
+  },
   brandSub: { fontSize: "11px", color: "#444" },
   homeContent: {
     flex: 1,
@@ -645,7 +690,14 @@ const s = {
   },
   titleBlock: { marginBottom: "48px" },
   titlePre: { fontSize: "11px", color: "#444", marginBottom: "16px" },
-  title: { fontSize: "clamp(28px, 4vw, 42px)", fontWeight: "bold", color: "#fff", lineHeight: 1.2, marginBottom: "12px", fontFamily: "inherit" },
+  title: {
+    fontSize: "clamp(28px, 4vw, 42px)",
+    fontWeight: "bold",
+    color: "#fff",
+    lineHeight: 1.2,
+    marginBottom: "12px",
+    fontFamily: "inherit",
+  },
   titleAccent: { color: "#fff", borderBottom: "2px solid #fff" },
   subtitle: { fontSize: "14px", color: "#555" },
 
@@ -693,7 +745,13 @@ const s = {
     border: "1px solid #333",
     borderTop: "none",
   },
-  selectedTag: { fontSize: "10px", color: "#fff", background: "#333", padding: "2px 6px", letterSpacing: "1px" },
+  selectedTag: {
+    fontSize: "10px",
+    color: "#fff",
+    background: "#333",
+    padding: "2px 6px",
+    letterSpacing: "1px",
+  },
   selectedName: { fontSize: "13px", color: "#fff", flex: 1 },
   selectedMeta: { fontSize: "11px", color: "#555" },
 
@@ -708,7 +766,12 @@ const s = {
     transition: "border-color 0.15s",
   },
   modeCardActive: { borderColor: "#fff", background: "#1a1a1a" },
-  modeLabel: { fontSize: "12px", color: "#fff", marginBottom: "6px", letterSpacing: "1px" },
+  modeLabel: {
+    fontSize: "12px",
+    color: "#fff",
+    marginBottom: "6px",
+    letterSpacing: "1px",
+  },
   modeDesc: { fontSize: "12px", color: "#555", lineHeight: 1.5 },
 
   // ANALYZE
@@ -726,7 +789,12 @@ const s = {
 
   // LOADING
   loadingBlock: { marginBottom: "24px" },
-  loadingBar: { height: "2px", background: "#222", marginBottom: "8px", overflow: "hidden" },
+  loadingBar: {
+    height: "2px",
+    background: "#222",
+    marginBottom: "8px",
+    overflow: "hidden",
+  },
   loadingFill: {
     height: "100%",
     width: "40%",
@@ -735,7 +803,12 @@ const s = {
   },
   loadingMsg: { fontSize: "11px", color: "#555" },
 
-  error: { fontSize: "12px", color: "#ff4444", marginBottom: "16px", fontFamily: "inherit" },
+  error: {
+    fontSize: "12px",
+    color: "#ff4444",
+    marginBottom: "16px",
+    fontFamily: "inherit",
+  },
 
   // RESULTS
   results: { minHeight: "100vh", display: "flex", flexDirection: "column" },
@@ -773,26 +846,66 @@ const s = {
   reportWrap: { display: "flex", flexDirection: "column", gap: "0" },
 
   // SECTIONS
-  section: { borderBottom: "1px solid #1a1a1a", paddingBottom: "28px", marginBottom: "28px" },
-  sectionLabel: { fontSize: "10px", color: "#444", letterSpacing: "3px", marginBottom: "16px" },
+  section: {
+    borderBottom: "1px solid #1a1a1a",
+    paddingBottom: "28px",
+    marginBottom: "28px",
+  },
+  sectionLabel: {
+    fontSize: "10px",
+    color: "#444",
+    letterSpacing: "3px",
+    marginBottom: "16px",
+  },
   sectionContent: {},
   bodyText: { fontSize: "14px", color: "#aaa", lineHeight: 1.7 },
   chips: { display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "12px" },
-  chip: { fontSize: "11px", color: "#888", border: "1px solid #333", padding: "3px 10px" },
+  chip: {
+    fontSize: "11px",
+    color: "#888",
+    border: "1px solid #333",
+    padding: "3px 10px",
+  },
 
   // FILE ROWS
-  fileRow: { display: "flex", gap: "16px", marginBottom: "16px", alignItems: "flex-start" },
-  fileNum: { fontSize: "11px", color: "#444", width: "16px", flexShrink: 0, paddingTop: "2px" },
-  filePath: { fontSize: "13px", color: "#e0e0e0", fontFamily: "inherit", marginBottom: "4px" },
+  fileRow: {
+    display: "flex",
+    gap: "16px",
+    marginBottom: "16px",
+    alignItems: "flex-start",
+  },
+  fileNum: {
+    fontSize: "11px",
+    color: "#444",
+    width: "16px",
+    flexShrink: 0,
+    paddingTop: "2px",
+  },
+  filePath: {
+    fontSize: "13px",
+    color: "#e0e0e0",
+    fontFamily: "inherit",
+    marginBottom: "4px",
+  },
   fileWhy: { fontSize: "12px", color: "#666", lineHeight: 1.5 },
 
   // CORE FUNCTION
   coreBlock: { border: "1px solid #222", padding: "16px" },
-  coreName: { fontSize: "16px", color: "#fff", fontWeight: "bold", marginBottom: "4px" },
+  coreName: {
+    fontSize: "16px",
+    color: "#fff",
+    fontWeight: "bold",
+    marginBottom: "4px",
+  },
   corePath: { fontSize: "11px", color: "#444", marginBottom: "12px" },
 
   // DANGER
-  dangerRow: { display: "flex", gap: "12px", marginBottom: "12px", alignItems: "flex-start" },
+  dangerRow: {
+    display: "flex",
+    gap: "12px",
+    marginBottom: "12px",
+    alignItems: "flex-start",
+  },
   dangerTag: { color: "#ff4444", fontSize: "14px", flexShrink: 0 },
 
   // FIRST TASK
@@ -808,13 +921,45 @@ const s = {
   // IMPROVE SPECIFIC
   scoreRow: { display: "flex", gap: "24px", alignItems: "flex-start" },
   score: { fontSize: "48px", fontWeight: "bold", lineHeight: 1, flexShrink: 0 },
-  bigProblem: { border: "1px solid #ff444433", padding: "16px", background: "#110000" },
-  bigProblemTitle: { fontSize: "16px", color: "#ff4444", fontWeight: "bold", marginBottom: "4px" },
-  issueRow: { display: "flex", gap: "16px", marginBottom: "16px", alignItems: "flex-start" },
-  severityTag: { fontSize: "10px", border: "1px solid", padding: "2px 6px", letterSpacing: "1px", flexShrink: 0, marginTop: "2px" },
+  bigProblem: {
+    border: "1px solid #ff444433",
+    padding: "16px",
+    background: "#110000",
+  },
+  bigProblemTitle: {
+    fontSize: "16px",
+    color: "#ff4444",
+    fontWeight: "bold",
+    marginBottom: "4px",
+  },
+  issueRow: {
+    display: "flex",
+    gap: "16px",
+    marginBottom: "16px",
+    alignItems: "flex-start",
+  },
+  severityTag: {
+    fontSize: "10px",
+    border: "1px solid",
+    padding: "2px 6px",
+    letterSpacing: "1px",
+    flexShrink: 0,
+    marginTop: "2px",
+  },
   issueTitle: { fontSize: "13px", color: "#e0e0e0", marginBottom: "4px" },
   missingRow: { display: "flex", gap: "12px", marginBottom: "8px" },
   missingDash: { color: "#444", flexShrink: 0 },
-  roadmapRow: { display: "flex", gap: "16px", marginBottom: "12px", alignItems: "flex-start" },
-  roadmapNum: { fontSize: "11px", color: "#444", width: "16px", flexShrink: 0, paddingTop: "2px" },
+  roadmapRow: {
+    display: "flex",
+    gap: "16px",
+    marginBottom: "12px",
+    alignItems: "flex-start",
+  },
+  roadmapNum: {
+    fontSize: "11px",
+    color: "#444",
+    width: "16px",
+    flexShrink: 0,
+    paddingTop: "2px",
+  },
 };
