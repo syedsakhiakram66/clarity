@@ -163,6 +163,96 @@ def analyze():
         }), 500
 
 # -------------------------------------------------------------------
+# Chat route
+# -------------------------------------------------------------------
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    try:
+        body = request.json
+
+        if not body:
+            return jsonify({"success": False, "error": "Request body is required"}), 400
+
+        messages = body.get("messages")
+        repo_context = body.get("repoContext")
+
+        if not messages or not repo_context:
+            return jsonify({"success": False, "error": "messages and repoContext are required"}), 400
+
+        token = get_ibm_token()
+
+        system_prompt = """You are IBM Bob, an expert software development partner.
+
+You are helping a developer fix issues in their codebase. You have full context of their repository.
+
+When presenting a fix:
+- Give a SHORT explanation (2-3 sentences max) of what the problem is and why
+- Then give the actual code fix in a code block with the correct language tag
+- If the user asks a follow up question, answer it concisely and in context
+
+Format your response EXACTLY like this:
+EXPLANATION: <2-3 sentences>
+FIX:
+```language
+<actual code>
+```
+
+Be specific. Use real code. Never be generic."""
+
+        response = requests.post(
+            "https://us-south.ml.cloud.ibm.com/ml/v1/text/chat?version=2023-05-29",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}"
+            },
+            json={
+                "model_id": "ibm/granite-4-h-small",
+                "project_id": IBM_PROJECT_ID,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": system_prompt + f"\n\nREPO CONTEXT:\n{repo_context}"
+                    },
+                    *messages
+                ],
+                "max_tokens": 1500,
+                "temperature": 0.2
+            },
+            timeout=120
+        )
+
+        if not response.ok:
+            error_body = ""
+            try:
+                error_body = response.json()
+            except Exception:
+                error_body = response.text
+            return jsonify({
+                "success": False,
+                "error": f"IBM API returned {response.status_code}",
+                "detail": error_body
+            }), 500
+
+        data = response.json()
+
+        text = ""
+        if "choices" in data:
+            text = data["choices"][0]["message"]["content"]
+        elif "results" in data:
+            text = data["results"][0]["generated_text"]
+
+        if not text:
+            return jsonify({"success": False, "error": "Could not extract text from IBM response"}), 500
+
+        return jsonify({"success": True, "text": text})
+
+    except Exception as e:
+        print("\nFULL ERROR:")
+        print(str(e))
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# -------------------------------------------------------------------
 # Run
 # -------------------------------------------------------------------
 
