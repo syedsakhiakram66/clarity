@@ -79,10 +79,9 @@ async function searchGitHub(query) {
 }
 
 async function fetchRepoContext(owner, repo) {
-  const infoRes = await fetch(
-    `https://api.github.com/repos/${owner}/${repo}`,
-    { headers: GITHUB_HEADERS }
-  );
+  const infoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+    headers: GITHUB_HEADERS,
+  });
 
   if (infoRes.status === 403 || infoRes.status === 429) {
     throw new Error("GitHub rate limit hit. Wait a minute and try again.");
@@ -92,7 +91,7 @@ async function fetchRepoContext(owner, repo) {
 
   const treeRes = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`,
-    { headers: GITHUB_HEADERS }
+    { headers: GITHUB_HEADERS },
   );
   const tree = await treeRes.json();
   const allFiles = tree.tree || [];
@@ -102,7 +101,7 @@ async function fetchRepoContext(owner, repo) {
   try {
     const readmeRes = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/readme`,
-      { headers: GITHUB_HEADERS }
+      { headers: GITHUB_HEADERS },
     );
     const readmeData = await readmeRes.json();
     readme = atob(readmeData.content.replace(/\n/g, ""));
@@ -111,34 +110,71 @@ async function fetchRepoContext(owner, repo) {
 
   // Priority files — these tell Bob the most
   const PRIORITY_NAMES = [
-    "package.json", "requirements.txt", "go.mod", "Cargo.toml",
-    "pyproject.toml", "Makefile", "docker-compose.yml", "Dockerfile",
-    ".env.example", "config.js", "config.ts", "config.py",
-    "index.js", "index.ts", "main.py", "main.go", "main.rs",
-    "app.js", "app.ts", "app.py", "server.js", "server.ts",
+    "package.json",
+    "requirements.txt",
+    "go.mod",
+    "Cargo.toml",
+    "pyproject.toml",
+    "Makefile",
+    "docker-compose.yml",
+    "Dockerfile",
+    ".env.example",
+    "config.js",
+    "config.ts",
+    "config.py",
+    "index.js",
+    "index.ts",
+    "main.py",
+    "main.go",
+    "main.rs",
+    "app.js",
+    "app.ts",
+    "app.py",
+    "server.js",
+    "server.ts",
   ];
 
   const CODE_EXTENSIONS = [
-    ".js", ".ts", ".jsx", ".tsx", ".py", ".go",
-    ".java", ".rs", ".cpp", ".c", ".rb", ".php"
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".py",
+    ".go",
+    ".java",
+    ".rs",
+    ".cpp",
+    ".c",
+    ".rb",
+    ".php",
   ];
 
-  const IGNORE = ["node_modules", ".git", "package-lock", "yarn.lock", "dist/", "build/", ".min."];
+  const IGNORE = [
+    "node_modules",
+    ".git",
+    "package-lock",
+    "yarn.lock",
+    "dist/",
+    "build/",
+    ".min.",
+  ];
 
   const shouldIgnore = (path) => IGNORE.some((i) => path.includes(i));
 
   // Split into priority and regular files
   const priorityFiles = allFiles.filter(
-    (f) => f.type === "blob" &&
-    !shouldIgnore(f.path) &&
-    PRIORITY_NAMES.some((name) => f.path.endsWith(name))
+    (f) =>
+      f.type === "blob" &&
+      !shouldIgnore(f.path) &&
+      PRIORITY_NAMES.some((name) => f.path.endsWith(name)),
   );
 
   const codeFiles = allFiles.filter(
-    (f) => f.type === "blob" &&
-    !shouldIgnore(f.path) &&
-    CODE_EXTENSIONS.some((ext) => f.path.endsWith(ext)) &&
-    !priorityFiles.includes(f)
+    (f) =>
+      f.type === "blob" &&
+      !shouldIgnore(f.path) &&
+      CODE_EXTENSIONS.some((ext) => f.path.endsWith(ext)) &&
+      !priorityFiles.includes(f),
   );
 
   // Fetch priority files first, then fill up with code files
@@ -152,7 +188,7 @@ async function fetchRepoContext(owner, repo) {
     try {
       const res = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/contents/${file.path}`,
-        { headers: GITHUB_HEADERS }
+        { headers: GITHUB_HEADERS },
       );
       const data = await res.json();
       if (data.content) {
@@ -278,11 +314,23 @@ export default function Clarity() {
       let parsed;
 
       try {
-        const clean = text.replace(/```json|```/g, "").trim();
+        // Strip markdown code fences
+        let clean = text.replace(/```json|```/g, "").trim();
+
+        // Find the first { and last } — extract just the JSON object
+        const start = clean.indexOf("{");
+        const end = clean.lastIndexOf("}");
+
+        if (start === -1 || end === -1) {
+          console.log("RAW IBM OUTPUT:", text);
+          throw new Error("No JSON object found in response");
+        }
+
+        clean = clean.slice(start, end + 1);
         parsed = JSON.parse(clean);
       } catch (e) {
         console.log("RAW IBM OUTPUT:", text);
-        throw new Error("Model returned invalid JSON");
+        throw new Error(`Failed to parse Bob's response: ${e.message}`);
       }
       setResult({ ...parsed, repo: selectedRepo, mode });
       setScreen("results");
@@ -343,7 +391,28 @@ export default function Clarity() {
     </div>
   );
 }
+// Loading Step
+function LoadingStep({ text, index }) {
+  const [visible, setVisible] = useState(false);
 
+  useEffect(() => {
+    const timer = setTimeout(() => setVisible(true), index * 2500);
+    return () => clearTimeout(timer);
+  }, [index]);
+
+  if (!visible) return null;
+
+  return (
+    <div style={{
+      fontSize: "11px",
+      color: "#444",
+      marginTop: "6px",
+      animation: "fadein 0.4s ease",
+    }}>
+      <span style={{ color: "#00ff88" }}>✓</span> {text}
+    </div>
+  );
+}
 // ─── Home Screen ──────────────────────────────────────────────────────────────
 
 function Home({
@@ -386,6 +455,38 @@ function Home({
             Bob reads the entire repository. You get clarity.
           </p>
         </div>
+
+        {/* Example repos — shown only when no query */}
+        {!query && (
+          <div style={s.exampleBlock}>
+            <div style={s.searchLabel}>// try these</div>
+            <div style={s.exampleRow}>
+              {[
+                { full_name: "facebook/react", language: "JavaScript", stargazers_count: 220000 },
+                { full_name: "torvalds/linux", language: "C", stargazers_count: 170000 },
+                { full_name: "antirez/redis", language: "C", stargazers_count: 66000 },
+                { full_name: "django/django", language: "Python", stargazers_count: 80000 },
+              ].map((repo) => (
+                <div
+                  key={repo.full_name}
+                  style={s.exampleChip}
+                  onClick={() => onSelectRepo(repo)}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "#fff";
+                    e.currentTarget.style.color = "#fff";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "#333";
+                    e.currentTarget.style.color = "#888";
+                  }}
+                >
+                  <div style={s.exampleName}>{repo.full_name}</div>
+                  <div style={s.exampleMeta}>{repo.language} · ★ {(repo.stargazers_count / 1000).toFixed(0)}k</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Search */}
         <div style={s.searchBlock}>
@@ -468,14 +569,25 @@ function Home({
         {error && <div style={s.error}>ERROR: {error}</div>}
 
         {/* Loading */}
-        {loading && (
-          <div style={s.loadingBlock}>
-            <div style={s.loadingBar}>
-              <div style={s.loadingFill} />
-            </div>
-            <div style={s.loadingMsg}>// {loadingMsg}</div>
-          </div>
-        )}
+       {loading && (
+  <div style={s.loadingBlock}>
+    <div style={s.loadingBar}>
+      <div style={s.loadingFill} />
+    </div>
+    <div style={s.loadingMsg}>// {loadingMsg}</div>
+    <div style={s.loadingSteps}>
+      {[
+        "fetching repository structure...",
+        "reading key files...",
+        "building context for Bob...",
+        "IBM Bob is analyzing...",
+        "generating your report...",
+      ].map((step, i) => (
+        <LoadingStep key={i} text={step} index={i} />
+      ))}
+    </div>
+  </div>
+)}
 
         {/* Analyze button */}
         <button
@@ -492,6 +604,7 @@ function Home({
     </div>
   );
 }
+// Stat Pi
 
 // ─── Results Screen ───────────────────────────────────────────────────────────
 
@@ -700,6 +813,7 @@ const s = {
     fontFamily: "'Courier New', 'Lucida Console', monospace",
   },
 
+  
   // HOME
   home: { minHeight: "100vh", display: "flex", flexDirection: "column" },
   topbar: {
@@ -735,6 +849,32 @@ const s = {
   },
   titleAccent: { color: "#fff", borderBottom: "2px solid #fff" },
   subtitle: { fontSize: "14px", color: "#555" },
+
+  // EXAMPLE REPOS
+  exampleBlock: {
+    marginBottom: "32px",
+  },
+  exampleRow: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "8px",
+  },
+  exampleChip: {
+    border: "1px solid #333",
+    padding: "10px 14px",
+    cursor: "pointer",
+    transition: "border-color 0.15s, color 0.15s",
+  },
+  exampleName: {
+    fontSize: "12px",
+    color: "inherit",
+    marginBottom: "2px",
+    fontFamily: "inherit",
+  },
+  exampleMeta: {
+    fontSize: "11px",
+    color: "#444",
+  },
 
   // SEARCH
   searchBlock: { marginBottom: "32px" },
@@ -997,4 +1137,10 @@ const s = {
     flexShrink: 0,
     paddingTop: "2px",
   },
+
+loadingSteps: {
+  marginTop: "16px",
+  display: "flex",
+  flexDirection: "column",
+},
 };
