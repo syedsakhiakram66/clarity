@@ -70,7 +70,6 @@ def health():
 
 @app.route("/analyze", methods=["POST"])
 def analyze():
-
     try:
         body = request.json
 
