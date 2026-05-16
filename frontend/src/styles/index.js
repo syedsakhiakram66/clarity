@@ -353,4 +353,18 @@ export const s = {
     gap: "8px",
     flexWrap: "wrap",
   },
+  //history
+  historyBlock: {
+  marginBottom: "32px",
+},
+historyItem: {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "10px 14px",
+  border: "1px solid #1a1a1a",
+  marginBottom: "6px",
+  cursor: "pointer",
+  transition: "border-color 0.15s, background 0.15s",
+},
 };

@@ -1,28 +1,113 @@
+import { useState } from 'react';
 import { s } from "../styles/index.js";
 import { LoadingStep } from "./LoadingStep.jsx";
+import { getHistory, clearHistory } from "../utils/history.js";
 
 export function Home({
-  query, onSearch, searching, searchResults, selectedRepo,
-  onSelectRepo, mode, onMode, onAnalyze, loading, loadingMsg,
-  error, searchRef,
+  query,
+  onSearch,
+  searching,
+  searchResults,
+  selectedRepo,
+  onSelectRepo,
+  mode,
+  onMode,
+  onAnalyze,
+  loading,
+  loadingMsg,
+  error,
+  searchRef,
 }) {
   const canAnalyze = selectedRepo && mode && !loading;
+  const [history, setHistory] = useState(() => getHistory());
 
+  const handleClearHistory = () => {
+    clearHistory();
+    setHistory([]);
+  };
+
+  function timeAgo(timestamp) {
+  const diff = Date.now() - timestamp;
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
   return (
     <div style={s.home}>
       <div style={s.topbar}>
         <span style={s.brand}>CLARITY</span>
-        <span style={s.brandSub}>// repo intelligence · powered by IBM Bob</span>
+        <span style={s.brandSub}>
+          // repo intelligence · powered by IBM Bob
+        </span>
       </div>
 
       <div style={s.homeContent}>
         <div style={s.titleBlock}>
+            {history.length > 0 && !query && (
+  <div style={s.historyBlock}>
+    <div style={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: "8px",
+    }}>
+      <div style={s.searchLabel}>// recent repos</div>
+      <button
+        onClick={handleClearHistory}
+        style={{
+          background: "transparent",
+          border: "none",
+          color: "#333",
+          fontSize: "10px",
+          fontFamily: "inherit",
+          cursor: "pointer",
+          letterSpacing: "1px",
+        }}
+      >
+        clear
+      </button>
+    </div>
+    {history.map((item, i) => (
+      <div
+        key={i}
+        style={s.historyItem}
+        onClick={() => onSelectRepo(item.repo)}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.borderColor = "#fff";
+          e.currentTarget.style.background = "#111";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.borderColor = "#1a1a1a";
+          e.currentTarget.style.background = "transparent";
+        }}
+      >
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: "12px", color: "#e0e0e0" }}>
+            {item.repo.full_name}
+          </div>
+          <div style={{ fontSize: "10px", color: "#444", marginTop: "2px" }}>
+            {item.mode === "onboard" ? "[NEW HERE]" : "[IMPROVE IT]"} · {timeAgo(item.analyzedAt)}
+          </div>
+        </div>
+        <div style={{ fontSize: "10px", color: "#333", letterSpacing: "1px" }}>
+          re-run →
+        </div>
+      </div>
+    ))}
+  </div>
+)}
           <div style={s.titlePre}>$ clarity --analyze</div>
           <h1 style={s.title}>
-            Drop into any codebase.<br />
+            Drop into any codebase.
+            <br />
             <span style={s.titleAccent}>Know exactly where to start.</span>
           </h1>
-          <p style={s.subtitle}>Bob reads the entire repository. You get clarity.</p>
+          <p style={s.subtitle}>
+            Bob reads the entire repository. You get clarity.
+          </p>
         </div>
 
         {!query && (
@@ -30,10 +115,26 @@ export function Home({
             <div style={s.searchLabel}>// try these</div>
             <div style={s.exampleRow}>
               {[
-                { full_name: "facebook/react", language: "JavaScript", stargazers_count: 220000 },
-                { full_name: "torvalds/linux", language: "C", stargazers_count: 170000 },
-                { full_name: "antirez/redis", language: "C", stargazers_count: 66000 },
-                { full_name: "django/django", language: "Python", stargazers_count: 80000 },
+                {
+                  full_name: "facebook/react",
+                  language: "JavaScript",
+                  stargazers_count: 220000,
+                },
+                {
+                  full_name: "torvalds/linux",
+                  language: "C",
+                  stargazers_count: 170000,
+                },
+                {
+                  full_name: "antirez/redis",
+                  language: "C",
+                  stargazers_count: 66000,
+                },
+                {
+                  full_name: "django/django",
+                  language: "Python",
+                  stargazers_count: 80000,
+                },
               ].map((repo) => (
                 <div
                   key={repo.full_name}
@@ -50,7 +151,8 @@ export function Home({
                 >
                   <div style={s.exampleName}>{repo.full_name}</div>
                   <div style={s.exampleMeta}>
-                    {repo.language} · ★ {(repo.stargazers_count / 1000).toFixed(0)}k
+                    {repo.language} · ★{" "}
+                    {(repo.stargazers_count / 1000).toFixed(0)}k
                   </div>
                 </div>
               ))}
@@ -80,12 +182,18 @@ export function Home({
                   key={repo.id}
                   style={s.dropdownItem}
                   onClick={() => onSelectRepo(repo)}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#1a1a1a")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.background = "#1a1a1a")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.background = "transparent")
+                  }
                 >
                   <div style={s.dropdownName}>{repo.full_name}</div>
                   <div style={s.dropdownMeta}>
-                    ★ {repo.stargazers_count.toLocaleString()} · {repo.language || "unknown"} · {repo.description?.slice(0, 60) || "no description"}
+                    ★ {repo.stargazers_count.toLocaleString()} ·{" "}
+                    {repo.language || "unknown"} ·{" "}
+                    {repo.description?.slice(0, 60) || "no description"}
                   </div>
                 </div>
               ))}
@@ -98,7 +206,9 @@ export function Home({
               <span style={s.selectedName}>{selectedRepo.full_name}</span>
               <span style={s.selectedMeta}>
                 {selectedRepo.language || ""}
-                {selectedRepo.stargazers_count ? ` · ★ ${selectedRepo.stargazers_count.toLocaleString()}` : ""}
+                {selectedRepo.stargazers_count
+                  ? ` · ★ ${selectedRepo.stargazers_count.toLocaleString()}`
+                  : ""}
               </span>
             </div>
           )}
@@ -109,12 +219,23 @@ export function Home({
             <div style={s.searchLabel}>// what do you need?</div>
             <div style={s.modeRow}>
               {[
-                { id: "onboard", label: "[NEW HERE]", desc: "I just joined this repo and have no idea what's going on" },
-                { id: "improve", label: "[IMPROVE IT]", desc: "I own this repo and want to know what to fix first" },
+                {
+                  id: "onboard",
+                  label: "[NEW HERE]",
+                  desc: "I just joined this repo and have no idea what's going on",
+                },
+                {
+                  id: "improve",
+                  label: "[IMPROVE IT]",
+                  desc: "I own this repo and want to know what to fix first",
+                },
               ].map((m) => (
                 <div
                   key={m.id}
-                  style={{ ...s.modeCard, ...(mode === m.id ? s.modeCardActive : {}) }}
+                  style={{
+                    ...s.modeCard,
+                    ...(mode === m.id ? s.modeCardActive : {}),
+                  }}
                   onClick={() => onMode(m.id)}
                 >
                   <div style={s.modeLabel}>{m.label}</div>
@@ -148,7 +269,10 @@ export function Home({
         )}
 
         <button
-          style={{ ...s.analyzeBtn, ...(loading ? { opacity: 0.4, cursor: "not-allowed" } : {}) }}
+          style={{
+            ...s.analyzeBtn,
+            ...(loading ? { opacity: 0.4, cursor: "not-allowed" } : {}),
+          }}
           onClick={onAnalyze}
           disabled={loading}
         >

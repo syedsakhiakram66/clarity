@@ -4,6 +4,7 @@ import { Results } from "./components/Results.jsx";
 import { BOB_SYSTEM_ONBOARD, BOB_SYSTEM_IMPROVE } from "./constants/prompts.js";
 import { fetchRepoContext } from "./utils/github.js";
 import { s } from "./styles/index.js";
+import { getHistory, addToHistory } from "./utils/history.js";
 
 export default function Clarity() {
   const [screen, setScreen] = useState("home");
@@ -19,6 +20,7 @@ export default function Clarity() {
   const [error, setError] = useState(null);
   const searchRef = useRef(null);
   const debounceRef = useRef(null);
+  
 
   const handleSearch = (val) => {
     setQuery(val);
@@ -107,6 +109,8 @@ export default function Clarity() {
       }
 
       setResult({ ...parsed, repo: selectedRepo, mode });
+      setResult({ ...parsed, repo: selectedRepo, mode });
+      addToHistory(selectedRepo, mode); // add this
       setScreen("results");
     } catch (err) {
       console.error("Error:", err);
