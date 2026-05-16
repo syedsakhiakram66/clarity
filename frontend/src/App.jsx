@@ -15,6 +15,10 @@ const MODES = [
   },
 ];
 
+const GITHUB_HEADERS = {
+  Authorization: `Bearer ${import.meta.env.VITE_GITHUB_TOKEN}`,
+};
+
 const BOB_SYSTEM_ONBOARD = `You are IBM Bob, an expert software development partner with deep code understanding.
 
 A developer just joined a new repository and needs onboarding. You have been given the full repository context.
@@ -68,6 +72,7 @@ Be specific. Use real file paths. Be brutally honest. Return ONLY valid JSON.`;
 async function searchGitHub(query) {
   const res = await fetch(
     `https://api.github.com/search/repositories?q=${encodeURIComponent(query)}&sort=stars&per_page=6`,
+    { headers: GITHUB_HEADERS },
   );
   const data = await res.json();
   return data.items || [];
@@ -75,12 +80,15 @@ async function searchGitHub(query) {
 
 async function fetchRepoContext(owner, repo) {
   // Get repo info
-  const infoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`);
+  const infoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+    headers: GITHUB_HEADERS,
+  });
   const info = await infoRes.json();
 
   // Get file tree
   const treeRes = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`,
+    { headers: GITHUB_HEADERS },
   );
   const tree = await treeRes.json();
 
@@ -89,6 +97,7 @@ async function fetchRepoContext(owner, repo) {
   try {
     const readmeRes = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/readme`,
+      { headers: GITHUB_HEADERS },
     );
     const readmeData = await readmeRes.json();
     readme = atob(readmeData.content.replace(/\n/g, ""));
@@ -121,6 +130,7 @@ async function fetchRepoContext(owner, repo) {
     try {
       const res = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/contents/${file.path}`,
+        { headers: GITHUB_HEADERS },
       );
       const data = await res.json();
       if (data.content) {
