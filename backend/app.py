@@ -84,7 +84,6 @@ def analyze():
 
         token = get_ibm_token()
 
-
         print("\nTOKEN OK\n")
 
         response = requests.post(
@@ -118,7 +117,21 @@ def analyze():
         print("\nIBM RESPONSE:")
         print(response.text)
 
-        response.raise_for_status()
+        if not response.ok:
+            error_body = ""
+            try:
+                error_body = response.json()
+            except Exception:
+                error_body = response.text
+
+            print("\nIBM ERROR BODY:")
+            print(error_body)
+
+            return jsonify({
+                "success": False,
+                "error": f"IBM API returned {response.status_code}",
+                "detail": error_body
+            }), 500
 
         data = response.json()
 
@@ -129,6 +142,11 @@ def analyze():
 
         elif "results" in data:
             text = data["results"][0]["generated_text"]
+
+        if not text:
+            print("\nUNEXPECTED IBM RESPONSE SHAPE:")
+            print(data)
+            return jsonify({"success": False, "error": "Could not extract text from IBM response"}), 500
 
         return jsonify({
             "success": True,
@@ -143,9 +161,6 @@ def analyze():
             "success": False,
             "error": str(e)
         }), 500
-
-
-
 
 # -------------------------------------------------------------------
 # Run
