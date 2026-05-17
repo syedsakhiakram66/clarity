@@ -182,7 +182,7 @@ def chat():
 
         token = get_ibm_token()
 
-  system_prompt = f"""You are IBM Bob, a principal engineer doing a live pair programming session.
+        system_prompt = f"""You are IBM Bob, a principal engineer doing a live pair programming session.
 
 You are looking at a specific issue in a real repository. You have the full codebase context below.
 
@@ -220,7 +220,7 @@ REPO CONTEXT:
                 "messages": [
                     {
                         "role": "system",
-                        "content": system_prompt + f"\n\nREPO CONTEXT:\n{repo_context}"
+                        "content": system_prompt
                     },
                     *messages
                 ],
