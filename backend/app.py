@@ -92,24 +92,24 @@ def analyze():
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {token}"
             },
-            json={
-                "model_id": "ibm/granite-4-h-small",
-                "project_id": IBM_PROJECT_ID,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": system_prompt
-                    },
-                    {
-                        "role": "user",
-                        "content": context
-                    }
-                ],
-                "max_tokens": 2000,
-                "temperature": 0.2
-            },
-            timeout=120
-        )
+           json={
+    "model_id": "ibm/granite-4-h-small",
+    "project_id": IBM_PROJECT_ID,
+    "messages": [
+        {
+            "role": "system",
+            "content": system_prompt
+        },
+        {
+            "role": "user",
+            "content": context
+        }
+    ],
+    "max_tokens": 3000,
+    "temperature": 0.1,
+    "repetition_penalty": 1.1
+},
+timeout=180 )
 
         print("\nIBM STATUS:")
         print(response.status_code)
@@ -182,23 +182,31 @@ def chat():
 
         token = get_ibm_token()
 
-        system_prompt = """You are IBM Bob, an expert software development partner.
+  system_prompt = f"""You are IBM Bob, a principal engineer doing a live pair programming session.
 
-You are helping a developer fix issues in their codebase. You have full context of their repository.
+You are looking at a specific issue in a real repository. You have the full codebase context below.
 
-When presenting a fix:
-- Give a SHORT explanation (2-3 sentences max) of what the problem is and why
-- Then give the actual code fix in a code block with the correct language tag
-- If the user asks a follow up question, answer it concisely and in context
+YOUR RULES:
+- Every fix you write MUST be based on actual code you can see in the REPO CONTEXT. Never invent function names, variable names, or file structures.
+- If you cannot see enough of the file to write the exact fix, say: "I can see this file exists but need more context — here is the pattern to apply:" and show a general pattern instead.
+- Never say "you should" or "consider" or "it would be good to". Be direct. Tell them exactly what to do.
+- Keep explanations to 2-3 sentences. Judges do not want essays.
+- If the user asks a follow-up question, answer it in context of the SAME issue unless they explicitly move on.
+- If the user asks something unrelated to the repo, bring them back: "Let's stay focused on this codebase — here's what I see..."
+- Write code in the correct language based on what you see in the repo. Never default to JavaScript if the repo is Python.
+- If the fix is more than 30 lines, break it into steps. Show step 1 first, then ask if they want step 2.
 
-Format your response EXACTLY like this:
-EXPLANATION: <2-3 sentences>
+FORMAT — respond EXACTLY like this every time:
+
+EXPLANATION: <2-3 sentences. What is wrong. Why it matters. What will break if not fixed.>
 FIX:
-```language
-<actual code>
+```<language>
+<actual working code based on what you can see in the repo>
 ```
+NEXT: <one sentence. What to do after this fix. What to test. What to watch out for.>
 
-Be specific. Use real code. Never be generic."""
+REPO CONTEXT:
+{repo_context}"""
 
         response = requests.post(
             "https://us-south.ml.cloud.ibm.com/ml/v1/text/chat?version=2023-05-29",
@@ -216,8 +224,9 @@ Be specific. Use real code. Never be generic."""
                     },
                     *messages
                 ],
-                "max_tokens": 1500,
-                "temperature": 0.2
+               "max_tokens": 2000,
+"temperature": 0.1,
+"repetition_penalty": 1.1
             },
             timeout=120
         )

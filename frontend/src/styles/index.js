@@ -23,7 +23,7 @@ export const s = {
     minHeight: "100vh",
     background: "#0a0a0a",
     color: "#d4d4d4",
-    fontFamily: "'Courier New', 'Lucida Console', monospace",
+    fontFamily: "'Cascadia Code', 'Lucida Console', monospace",
     overflowX: "hidden",
   },
 
@@ -416,13 +416,19 @@ export const s = {
     textTransform: "uppercase",
   },
   sectionContent: {},
-  bodyText: {
-    fontSize: "14px",
-    color: "#c8c8c8",
-    lineHeight: 1.75,
-    textAlign: "left",
-    margin: "0 0 8px 0",
-  },
+ bodyText: {
+  fontSize: "14px",
+  color: "#e0e0e0",
+  lineHeight: 1.75,
+  textAlign: "left",
+  margin: "0 0 8px 0",
+},
+
+fileWhy: { fontSize: "12px", color: "#b0b0b0", lineHeight: 1.6 },
+
+modeDesc: { fontSize: "12px", color: "#b0b0b0", lineHeight: 1.5 },
+
+subtitle: { fontSize: "14px", color: "#b0b0b0", marginTop: "12px", lineHeight: 1.6 },
   chips: {
     display: "flex",
     flexWrap: "wrap",
