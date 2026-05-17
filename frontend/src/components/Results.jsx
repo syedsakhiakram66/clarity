@@ -106,7 +106,7 @@ export function Results({ result, onReset, repoContext }) {
         ) : activeTab === "bob" ? (
           <BobChat result={result} repoContext={repoContext} />
         ) : (
-          <FileTree result={result} repoContext={repoContext} />
+         <FileTree result={result} repoContext={repoContext} privateToken={result.privateToken} />
         )}
       </div>
     </div>

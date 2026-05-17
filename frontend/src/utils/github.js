@@ -1,11 +1,18 @@
-const GITHUB_HEADERS = {
+const DEFAULT_HEADERS = {
   Authorization: `Bearer ${import.meta.env.VITE_GITHUB_TOKEN}`,
 };
 
-export async function searchGitHub(query) {
+export function getHeaders(privateToken = null) {
+  if (privateToken) {
+    return { Authorization: `Bearer ${privateToken}` };
+  }
+  return DEFAULT_HEADERS;
+}
+
+export async function searchGitHub(query, privateToken = null) {
   const res = await fetch(
     `https://api.github.com/search/repositories?q=${encodeURIComponent(query)}&sort=stars&per_page=6`,
-    { headers: GITHUB_HEADERS }
+    { headers: getHeaders(privateToken) }
   );
 
   if (res.status === 403 || res.status === 429) {
@@ -20,21 +27,27 @@ export async function searchGitHub(query) {
   return data.items || [];
 }
 
-export async function fetchRepoContext(owner, repo) {
+export async function fetchRepoContext(owner, repo, privateToken = null) {
+  const headers = getHeaders(privateToken);
+
   const infoRes = await fetch(
     `https://api.github.com/repos/${owner}/${repo}`,
-    { headers: GITHUB_HEADERS }
+    { headers }
   );
 
   if (infoRes.status === 403 || infoRes.status === 429) {
     throw new Error("GitHub rate limit hit. Wait a minute and try again.");
   }
 
+  if (infoRes.status === 404) {
+    throw new Error("Repository not found. If it's private, make sure your token has access.");
+  }
+
   const info = await infoRes.json();
 
   const treeRes = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`,
-    { headers: GITHUB_HEADERS }
+    { headers }
   );
   const tree = await treeRes.json();
   const allFiles = tree.tree || [];
@@ -43,7 +56,7 @@ export async function fetchRepoContext(owner, repo) {
   try {
     const readmeRes = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/readme`,
-      { headers: GITHUB_HEADERS }
+      { headers }
     );
     const readmeData = await readmeRes.json();
     readme = atob(readmeData.content.replace(/\n/g, ""));
@@ -95,7 +108,7 @@ export async function fetchRepoContext(owner, repo) {
     try {
       const res = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/contents/${file.path}`,
-        { headers: GITHUB_HEADERS }
+        { headers }
       );
       const data = await res.json();
       if (data.content) {

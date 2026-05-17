@@ -6,6 +6,7 @@ import { fetchRepoContext } from "./utils/github.js";
 import { s } from "./styles/index.js";
 import { getHistory, addToHistory } from "./utils/history.js";
 
+
 export default function Clarity() {
   const [screen, setScreen] = useState("home");
   const [query, setQuery] = useState("");
@@ -18,6 +19,7 @@ export default function Clarity() {
   const [loadingMsg, setLoadingMsg] = useState("");
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [privateToken, setPrivateToken] = useState(null);
   const searchRef = useRef(null);
   const debounceRef = useRef(null);
   
@@ -45,7 +47,7 @@ export default function Clarity() {
       setSearching(true);
       try {
         const { searchGitHub } = await import("./utils/github.js");
-        const results = await searchGitHub(val);
+        const results = await searchGitHub(val, privateToken);
         setSearchResults(results);
       } catch {
         setError("GitHub search failed. Check your connection.");
@@ -70,8 +72,8 @@ export default function Clarity() {
 
     try {
       setLoadingMsg("Fetching repository...");
-      const context = await fetchRepoContext(owner, repo);
-      setRepoContext(context); // add this line
+      const context = await fetchRepoContext(owner, repo, privateToken);
+      setRepoContext(context);
 
       setLoadingMsg("Bob is reading the codebase...");
       await new Promise((r) => setTimeout(r, 800));
@@ -108,8 +110,7 @@ export default function Clarity() {
         throw new Error(`Failed to parse Bob's response: ${e.message}`);
       }
 
-      setResult({ ...parsed, repo: selectedRepo, mode });
-      setResult({ ...parsed, repo: selectedRepo, mode });
+      setResult({ ...parsed, repo: selectedRepo, mode, privateToken });
       addToHistory(selectedRepo, mode); // add this
       setScreen("results");
     } catch (err) {
@@ -151,6 +152,8 @@ export default function Clarity() {
           loadingMsg={loadingMsg}
           error={error}
           searchRef={searchRef}
+          privateToken={privateToken}
+          onPrivateToken={setPrivateToken}
         />
       )}
       {screen === "results" && result && (

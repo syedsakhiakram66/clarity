@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 // ─── Classify files using Bob's report ───────────────────────────────────────
 
@@ -124,42 +124,76 @@ function FileViewer({ file, owner, repo }) {
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  const GITHUB_HEADERS = {
-    Authorization: `Bearer ${import.meta.env.VITE_GITHUB_TOKEN}`,
-  };
+  // Load file content when file changes
+  useEffect(() => {
+    let isMounted = true;
 
-  const load = async () => {
-    if (content || loading) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/contents/${file.path}`,
-        { headers: GITHUB_HEADERS }
-      );
-      const data = await res.json();
-      if (data.content) {
-        const decoded = atob(data.content.replace(/\n/g, ""));
-        setContent(decoded);
-      } else {
-        setError("Could not load file content.");
+    const loadContent = async () => {
+      // Reset state for new file
+      setContent(null);
+      setLoading(true);
+      setError(null);
+
+      try {
+        const token = import.meta.env.VITE_GITHUB_TOKEN;
+        if (!token) {
+          throw new Error("GitHub token not configured");
+        }
+
+        const response = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/contents/${file.path}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github.v3+json",
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        
+        if (!isMounted) return;
+
+        if (data.content) {
+          // Decode base64 content
+          const decoded = atob(data.content.replace(/\n/g, ""));
+          setContent(decoded);
+        } else {
+          setError("File content not available");
+        }
+      } catch (err) {
+        if (!isMounted) return;
+        setError(err.message || "Failed to fetch file");
+        console.error("Error loading file:", err);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
-    } catch {
-      setError("Failed to fetch file.");
+    };
+
+    loadContent();
+
+    // Cleanup function to prevent state updates on unmounted component
+    return () => {
+      isMounted = false;
+    };
+  }, [file.path, owner, repo]);
+
+  const handleCopy = async () => {
+    if (!content) return;
+
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
     }
-    setLoading(false);
-  };
-
-  // Auto load when file changes
-  useState(() => { load(); }, [file.path]);
-
-  // Trigger load on mount
-  if (!content && !loading && !error) load();
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -396,3 +430,4 @@ export function FileTree({ result, repoContext }) {
     </div>
   );
 }
+

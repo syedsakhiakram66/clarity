@@ -17,6 +17,8 @@ export function Home({
   loadingMsg,
   error,
   searchRef,
+  privateToken, 
+  onPrivateToken,
 }) {
   const canAnalyze = selectedRepo && mode && !loading;
   const [history, setHistory] = useState(() => getHistory());
@@ -159,6 +161,74 @@ export function Home({
             </div>
           </div>
         )}
+        {/* Private repo toggle */}
+<div style={{ marginBottom: "16px" }}>
+  <div
+    style={{
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "8px",
+      cursor: "pointer",
+      padding: "6px 0",
+    }}
+ onClick={() => {
+  if (privateToken !== null) {
+    onPrivateToken(null);
+  } else {
+    onPrivateToken("");
+  }
+}}
+
+  >
+    <div style={{
+      width: "28px",
+      height: "14px",
+      background: privateToken !== null ? "#fff" : "#222",
+      border: "1px solid #333",
+      borderRadius: "0",
+      position: "relative",
+      transition: "background 0.2s",
+    }}>
+      <div style={{
+        position: "absolute",
+        top: "2px",
+        left: privateToken !== null ? "14px" : "2px",
+        width: "8px",
+        height: "8px",
+        background: privateToken !== null ? "#000" : "#555",
+        transition: "left 0.2s",
+      }} />
+    </div>
+    <span style={{ fontSize: "11px", color: "#555", letterSpacing: "1px" }}>
+      🔒 private repo
+    </span>
+  </div>
+
+  {privateToken !== null && (
+    <div style={{ marginTop: "8px" }}>
+      <input
+        value={privateToken}
+        onChange={(e) => onPrivateToken(e.target.value)}
+        placeholder="paste your github personal access token..."
+        type="password"
+        style={{
+          width: "100%",
+          background: "#111",
+          border: "1px solid #333",
+          color: "#e0e0e0",
+          padding: "10px 14px",
+          fontSize: "13px",
+          fontFamily: "inherit",
+          outline: "none",
+          boxSizing: "border-box",
+        }}
+      />
+      <div style={{ fontSize: "10px", color: "#333", marginTop: "6px", letterSpacing: "1px" }}>
+        token stays in your browser only. never sent to our servers.
+      </div>
+    </div>
+  )}
+</div>
 
         <div style={s.searchBlock}>
           <div style={s.searchLabel}>// search github repos</div>
